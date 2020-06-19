@@ -1,0 +1,289 @@
+<html>
+
+<head>
+    <script src="three.js"></script>
+    <script src="OrbitControls.js"></script>
+</head>
+
+<body>
+    <script>
+        var screensize = 1000;
+        var scene = new THREE.Scene();
+        var camera = new THREE.PerspectiveCamera(100, window.innerWidth / window.innerHeight, 0.1, screensize * 3);
+        var renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+        var controls = new THREE.OrbitControls(camera, renderer.domElement);
+
+
+        //var controls = new THREE.OrbitControls(camera, renderer.domElement);
+        camera.position.x = screensize / 2;
+        camera.position.y = screensize / 2;
+        camera.position.z = screensize;
+        camera.lookAt(screensize / 2, screensize / 2, screensize / 2);
+
+        // constant lengths
+        let sdistance = 10;
+        let upperleg = 20;
+        let lowerleg = 30;
+        let xOffset = (i) => 1 - (i > 1) * 2;
+        let yOffset = (i) => 1 - (((i + 1) % 4) > 1) * 2;
+        // how much to crawl by
+        let dirX = 15;
+        let dirY = 0;
+        
+        // state machine
+        let state = 5;
+        //>4 is stationary; 0 is leg 0, 1 is leg 1 etc.
+        let fullLeg = 100;
+        let halfLeg = fullLeg / 2;
+        let counter = fullLeg;
+        //0 to 100 timesteps
+        // first 50 are move to centroid; second 50 are move to nice intersection point
+
+        /*
+        There are two representations of position:
+        - XYZ: legs, centre positions: either old or desired position. used for calculations
+        - ANG: leg angles, centre position: used for rendering.
+        */
+
+        function toAnglePosition(XYZ) {
+            let ANG = [];
+            //solve for each leg
+            for (let i = 0; i < 4; i++) {
+                let z = XYZ[i].z - XYZ[4].z;
+                let y = XYZ[i].y - (XYZ[4].y + yOffset(i) * sdistance);
+                let x = XYZ[i].x - (XYZ[4].x + xOffset(i) * sdistance);
+                let aa = Math.acos((z ** 2 + x ** 2 + y ** 2 + upperleg ** 2 - lowerleg ** 2) / (2 * upperleg * Math.sqrt(z ** 2 + x ** 2 + y ** 2))) + Math.atan2(z, Math.sqrt(x ** 2 + y ** 2));
+                let ff = -(Math.PI - Math.acos((lowerleg ** 2 + upperleg ** 2 - (z ** 2 + x ** 2 + y ** 2)) / (2 * lowerleg * upperleg)) - aa);
+                /*if (i % 2) {
+                    aa = Math.acos((z ** 2 + x ** 2 + y ** 2 + upperleg ** 2 - lowerleg ** 2) / (2 * upperleg * Math.sqrt(z ** 2 + x ** 2 + y ** 2))) + Math.atan2(z, Math.sqrt(x ** 2 + y ** 2));
+                    ff = -(Math.PI - Math.acos((z ** 2 + x ** 2 + y ** 2 + lowerleg ** 2 - upperleg ** 2) / (2 * lowerleg * Math.sqrt(z ** 2 + x ** 2 + y ** 2))) - aa);
+                }*/
+                ANG.push({
+                    s: Math.atan2(y, x),
+                    a: aa,
+                    f: ff,
+                })
+                console.log(`=====${i}======`);
+                console.log(x);
+                console.log(y);
+                console.log(z);
+                console.log(upperleg * Math.sin(aa) + lowerleg * Math.sin(ff));
+                console.log((upperleg * Math.cos(aa) + lowerleg * Math.cos(ff)) * Math.cos(Math.atan2(y, x)));
+                console.log((upperleg * Math.cos(aa) + lowerleg * Math.cos(ff)) * Math.sin(Math.atan2(y, x)));
+                console.log(upperleg * Math.sin(aa));
+                console.log((upperleg * Math.cos(aa)) * Math.cos(Math.atan2(y, x)));
+                console.log((upperleg * Math.cos(aa)) * Math.sin(Math.atan2(y, x)));
+            }
+            //copy over the centre position
+            ANG.push(XYZ[4]);
+            return ANG;
+        }
+
+        var bluelm = new THREE.LineBasicMaterial({ color: 0x0000ff });
+        var redlm = new THREE.LineBasicMaterial({ color: 0xff0000 });
+        var greenlm = new THREE.LineBasicMaterial({ color: 0x00ff00 });
+        let lines = [];
+        let lms = [
+            bluelm,
+            bluelm,
+            bluelm,
+            bluelm,
+
+            redlm,
+            redlm,
+
+            redlm,
+            redlm,
+
+            redlm,
+            redlm,
+
+            redlm,
+            redlm,
+
+            greenlm,
+            greenlm,
+            greenlm,
+
+            greenlm,
+            greenlm,
+            greenlm,
+
+            bluelm,
+        ]
+        function setGeomXYZ(line, i, xyz) {
+            line.geometry.vertices[i].x = xyz.x;
+            line.geometry.vertices[i].y = xyz.y;
+            line.geometry.vertices[i].z = xyz.z;
+        }
+        let nLines = 12 + 6 + 1;
+        function renderState(state, currentLeg) {
+            if (lines.length < nLines) {
+                for (let i = 0; i < nLines; i++) {
+                    let gm = new THREE.Geometry();
+                    gm.vertices.push(new THREE.Vector3(0, 0, 0));
+                    gm.vertices.push(new THREE.Vector3(0, 0, 0));
+                    //create the line
+                    let newline = new THREE.Line(gm, lms[i]);
+                    scene.add(newline);
+                    lines.push(newline);
+                }
+            }
+            //body rectangle
+            for (let i = 0; i < 4; i++) {
+                setGeomXYZ(lines[i], 0, {
+                    x: state[4].x + xOffset(i) * sdistance,
+                    y: state[4].y + yOffset(i) * sdistance,
+                    z: state[4].z
+                });
+                setGeomXYZ(lines[i], 1, {
+                    x: state[4].x + xOffset((i + 1) % 4) * sdistance,
+                    y: state[4].y + yOffset((i + 1) % 4) * sdistance,
+                    z: state[4].z
+                });
+                lines[i].geometry.verticesNeedUpdate = true;
+            }
+            console.log(`w:${state[4].z}`);
+            // legs
+            let wrists = [];
+            for (let i = 0; i < 4; i++) {
+                let start = {
+                    x: state[4].x + xOffset(i) * sdistance,
+                    y: state[4].y + yOffset(i) * sdistance,
+                    z: state[4].z
+                };
+                let elbow = {
+                    x: start.x + upperleg * Math.cos(state[i].a) * Math.cos(state[i].s),
+                    y: start.y + upperleg * Math.cos(state[i].a) * Math.sin(state[i].s),
+                    z: start.z + upperleg * Math.sin(state[i].a)
+                };
+                let wrist = {
+                    x: elbow.x + lowerleg * Math.cos(state[i].f) * Math.cos(state[i].s),
+                    y: elbow.y + lowerleg * Math.cos(state[i].f) * Math.sin(state[i].s),
+                    z: elbow.z + lowerleg * Math.sin(state[i].f)
+                }
+                wrists.push(wrist);
+                setGeomXYZ(lines[4 + i * 2], 0, start);
+                setGeomXYZ(lines[4 + i * 2], 1, elbow);
+                setGeomXYZ(lines[5 + i * 2], 0, elbow);
+                setGeomXYZ(lines[5 + i * 2], 1, wrist);
+                lines[4 + i * 2].geometry.verticesNeedUpdate = true;
+                lines[5 + i * 2].geometry.verticesNeedUpdate = true;
+            }
+            //floor tris
+            let currentWrists = wrists.filter((v, i) => i != currentLeg);
+            for (let i = 0; i < 3; i++) {
+                setGeomXYZ(lines[i + 12], 0, currentWrists[i]);
+                setGeomXYZ(lines[i + 12], 1, currentWrists[(i + 1) % 3]);
+                lines[i + 12].geometry.verticesNeedUpdate = true;
+            }
+
+            let nextWrists = wrists.filter((v, i) => i != (currentLeg + 1) % 4);
+            for (let i = 0; i < 3; i++) {
+                setGeomXYZ(lines[i + 15], 0, nextWrists[i]);
+                setGeomXYZ(lines[i + 15], 1, nextWrists[(i + 1) % 3]);
+                lines[i + 15].geometry.verticesNeedUpdate = true;
+            }
+
+            //body vert
+            setGeomXYZ(lines[18], 0, state[4]);
+            state[4].z = 0;
+            setGeomXYZ(lines[18], 1, state[4]);
+            lines[18].geometry.verticesNeedUpdate = true;
+            renderer.render(scene, camera);
+        }
+
+        function getCentroid(verts) {
+            return {
+                x: verts.map(i => i.x).reduce((p, v) => p + v, 0) / 3,
+                y: verts.map(i => i.y).reduce((p, v) => p + v, 0) / 3
+            }
+        }
+
+        function getIntersection(v1, v2) {
+            let m1 = (v1[0].y - v1[1].y) / (v1[0].x - v1[1].x);
+            let m2 = (v2[0].y - v2[1].y) / (v2[0].x - v2[1].x);
+            let x = ((m1 * v1[0].x) - (m2 * v2[0].x) + v2[0].y - v1[0].y) / (m1 - m2);
+            let y = m1 * x - m1 * v1[0].x + v1[0].y;
+            return {
+                x: x,
+                y: y
+            }
+        }
+        let initalR = 30;
+        let oldState = [
+            { x: initalR, y: initalR, z: 0 },
+            { x: initalR, y: -initalR, z: 0 },
+            { x: -initalR, y: -initalR, z: 0 },
+            { x: -initalR, y: initalR, z: 0 },
+            { x: 0, y: 0, z: 20 }
+        ];
+        let targetState = oldState;
+
+        function update() {
+            // transition the state machine, if necessary
+            if (counter == fullLeg) {
+                counter = 0;
+                state++;
+                state %= 4;
+                oldState = targetState;
+                targetState = JSON.parse(JSON.stringify(oldState));
+
+                //set the body target to the centroid
+                //ditch this because the previous intersection is good enough
+                /*
+                targetState[4] = getCentroid(targetState.filter((v, i) => (i != 4 && i != state)));
+                targetState[4].z = oldState[4].z;
+                */
+
+                //set the moving leg target to a raised position
+                targetState[state].z = 5;
+            } else if (counter == halfLeg) {
+                //set the start point to here; set the target point to the nice intersection point
+                oldState = targetState;
+                targetState = JSON.parse(JSON.stringify(oldState));
+
+                //Set the body target to the future intersection
+                let oldpair = [(state + 3) % 4, (state + 1) % 4];
+                oldpair = oldpair.map(i=>targetState[i]);
+                let newpair = [state, (state + 2) % 4];
+                newpair = newpair.map(i=>targetState[i]);
+                let intersection = getIntersection(oldpair, newpair);
+                // push the intersection up by the oldpair vector
+                targetState[4].x = intersection.x + (oldpair[0].x - oldpair[1].x) / 10;
+                targetState[4].y = intersection.y + (oldpair[0].y - oldpair[1].y) / 10;
+
+                //set the moving leg target to future position
+                targetState[state].z = 0;
+                targetState[state].x += dirX;
+                targetState[state].y += dirY;
+            }
+            let desiredState = JSON.parse(JSON.stringify(oldState));
+            let halfpercent = counter;
+            let fullpercent = halfLeg;
+            if (counter >= halfLeg) {
+                halfpercent = counter - halfLeg;
+                fullpercent = fullLeg - halfLeg;
+            }
+            desiredState = desiredState.map((v, i) => {
+                let intm = {};
+                for (coord in v) {
+                    intm[coord] = oldState[i][coord] + (targetState[i][coord] - oldState[i][coord]) * halfpercent / fullpercent;
+                }
+                return intm;
+            });
+
+            let stateToRender = toAnglePosition(desiredState);
+            renderState(stateToRender, state);
+            requestAnimationFrame(update);
+            counter++;
+        }
+
+        requestAnimationFrame(update);
+
+    </script>
+</body>
+
+</html>
