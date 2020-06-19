@@ -17,10 +17,11 @@
 
 
         //var controls = new THREE.OrbitControls(camera, renderer.domElement);
-        camera.position.x = screensize / 2;
-        camera.position.y = screensize / 2;
-        camera.position.z = screensize;
-        camera.lookAt(screensize / 2, screensize / 2, screensize / 2);
+        camera.position.y = screensize / 8;
+        camera.position.z = screensize / 8;
+        camera.position.x = screensize/4;
+        camera.lookAt(screensize / 8, screensize / 8, screensize / 8);
+        controls.update();
 
         // constant lengths
         let sdistance = 10;
@@ -65,7 +66,7 @@
                     a: aa,
                     f: ff,
                 })
-                console.log(`=====${i}======`);
+                /*console.log(`=====${i}======`);
                 console.log(x);
                 console.log(y);
                 console.log(z);
@@ -75,6 +76,7 @@
                 console.log(upperleg * Math.sin(aa));
                 console.log((upperleg * Math.cos(aa)) * Math.cos(Math.atan2(y, x)));
                 console.log((upperleg * Math.cos(aa)) * Math.sin(Math.atan2(y, x)));
+                */
             }
             //copy over the centre position
             ANG.push(XYZ[4]);
